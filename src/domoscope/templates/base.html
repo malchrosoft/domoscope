@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Domoscope{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Domoscope<span class="dot">.</span></a>
+    <nav>
+      <a href="/">Appareils</a>
+      <a href="/report">Rapport</a>
+      <a href="/api/devices" target="_blank" rel="noreferrer">API JSON</a>
+    </nav>
+  </header>
+  <main>
+    {% if message %}
+      <div class="flash">{{ message }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    Domoscope {{ version }} · scan local uniquement · aucune donnée envoyée dans le cloud
+  </footer>
+</body>
+</html>

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Domoscope · {{ device.ip }}{% endblock %}
+{% block content %}
+<p><a href="/">← Retour à l’inventaire</a></p>
+
+<section class="hero">
+  <div>
+    <h1>{{ device.device_type }}</h1>
+    <p class="muted">{{ device.ip }}{% if device.hostname %} · {{ device.hostname }}{% endif %}</p>
+  </div>
+  <span class="badge {{ 'ok' if device.controllable else '' }}">
+    {{ "pilotable" if device.controllable else "non configuré" }}
+  </span>
+</section>
+
+<section class="grid">
+  <article class="card">
+    <h2>Identité</h2>
+    <dl>
+      <dt>IP</dt><dd class="mono">{{ device.ip }}</dd>
+      <dt>MAC</dt><dd class="mono">{{ device.mac or "—" }}</dd>
+      <dt>Fabricant</dt><dd>{{ device.vendor or "—" }}</dd>
+      <dt>Nom</dt><dd>{{ device.hostname or "—" }}</dd>
+      <dt>Première vue</dt><dd>{{ device.first_seen }}</dd>
+      <dt>Dernière vue</dt><dd>{{ device.last_seen }}</dd>
+      <dt>Sources</dt><dd>{{ device.sources | join(", ") or "—" }}</dd>
+    </dl>
+  </article>
+
+  <article class="card">
+    <h2>Ports ouverts</h2>
+    {% if ports %}
+      <ul class="tags">
+        {% for port in ports %}<li>{{ port }}</li>{% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Aucun port TCP détecté.</p>
+    {% endif %}
+    <h2>Services</h2>
+    {% if service_labels %}
+      <ul class="tags">
+        {% for label in service_labels %}<li>{{ label }}</li>{% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Aucun service découvert.</p>
+    {% endif %}
+    {% if device.services %}
+      <details>
+        <summary>Détails bruts</summary>
+        <pre>{{ device.services | tojson(indent=2) }}</pre>
+      </details>
+    {% endif %}
+  </article>
+</section>
+
+{% if device.is_tuya %}
+<section class="card">
+  <h2>Pilotage Tuya / Superia Milano</h2>
+  {% if device.controllable %}
+    <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+      <button name="action" value="on">Allumer</button>
+      <button name="action" value="off">Éteindre</button>
+      <button name="action" value="toggle">Basculer</button>
+    </form>
+    <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+      <label>Luminosité
+        <input type="number" name="brightness" min="0" max="100" value="100">
+      </label>
+      <button name="action" value="brightness">Appliquer</button>
+    </form>
+    <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+      <label>Température
+        <input type="number" name="color_temp" min="0" max="100" value="50">
+      </label>
+      <button name="action" value="color_temp">Appliquer</button>
+    </form>
+    <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+      <label>R <input type="number" name="red" min="0" max="255" value="255"></label>
+      <label>G <input type="number" name="green" min="0" max="255" value="255"></label>
+      <label>B <input type="number" name="blue" min="0" max="255" value="255"></label>
+      <button name="action" value="color">Appliquer</button>
+    </form>
+  {% else %}
+    <p class="muted">
+      Renseigne le <strong>Device ID</strong> et la <strong>Local Key</strong> Tuya ci-dessous
+      pour activer le pilotage local.
+    </p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Modifier / inscrire</h2>
+  <form method="post" action="/devices/{{ device.id }}" class="stack">
+    <label>Nom d’hôte
+      <input type="text" name="hostname" value="{{ device.hostname or '' }}">
+    </label>
+    <label>Type d’appareil
+      <input type="text" name="device_type" value="{{ device.device_type }}">
+    </label>
+    <label>Notes
+      <textarea name="notes" rows="3">{{ device.notes }}</textarea>
+    </label>
+    <fieldset>
+      <legend>Tuya / Superia Milano</legend>
+      <label>Device ID
+        <input type="text" name="tuya_device_id" value="{{ device.tuya_device_id or '' }}" autocomplete="off">
+      </label>
+      <label>Local Key
+        <input type="password" name="tuya_local_key" placeholder="{{ '••••••••' if device.tuya_local_key else '' }}" autocomplete="new-password">
+      </label>
+      <label>Version protocole
+        <input type="text" name="tuya_version" value="{{ device.tuya_version or '3.3' }}">
+      </label>
+      <label class="check">
+        <input type="checkbox" name="clear_tuya" value="true"> Effacer les identifiants Tuya
+      </label>
+    </fieldset>
+    <button class="primary" type="submit">Enregistrer</button>
+  </form>
+</section>
+{% endblock %}

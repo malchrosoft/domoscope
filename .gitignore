@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Runtime data: database, reports, encryption key
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# Secrets (never commit these)
+.env
+secret.key
+*.key
+*.pem
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store

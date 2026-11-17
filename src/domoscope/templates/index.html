@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Domoscope · appareils{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Inventaire du réseau</h1>
+    <p class="muted">
+      {% if network %}
+        Interface <strong>{{ network.interface }}</strong> · {{ network.ip }}/{{ network.prefix }}
+        {% if network.gateway %}· passerelle {{ network.gateway }}{% endif %}
+      {% else %}
+        Aucune interface réseau détectée.
+      {% endif %}
+    </p>
+  </div>
+  <form method="post" action="/scan">
+    <button class="primary" type="submit">Lancer un scan</button>
+  </form>
+</section>
+
+<section class="stats">
+  <article><span>{{ stats.devices }}</span><small>appareils</small></article>
+  <article><span>{{ stats.controllable }}</span><small>pilotables</small></article>
+  <article><span>{{ stats.scans }}</span><small>scans</small></article>
+</section>
+
+{% if latest %}
+<p class="muted">
+  Dernier scan : {{ latest.finished_at }} · {{ latest.hosts_alive }} hôtes actifs ·
+  {{ latest.devices_found }} appareils · {{ latest.devices_new }} nouveaux.
+</p>
+{% else %}
+<p class="muted">Aucun scan pour le moment. Lance le premier scan.</p>
+{% endif %}
+
+{% if devices %}
+<table>
+  <thead>
+    <tr>
+      <th>IP</th>
+      <th>Type</th>
+      <th>Fabricant</th>
+      <th>Nom</th>
+      <th>MAC</th>
+      <th>Ports</th>
+      <th>Vu</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for device in devices %}
+    <tr>
+      <td><a href="/devices/{{ device.id }}">{{ device.ip }}</a></td>
+      <td>
+        {{ device.device_type }}
+        {% if device.controllable %}<span class="badge ok">pilotable</span>{% endif %}
+      </td>
+      <td>{{ device.vendor or "—" }}</td>
+      <td>{{ device.hostname or "—" }}</td>
+      <td class="mono">{{ device.mac or "—" }}</td>
+      <td class="mono">{{ device.open_ports | join(", ") or "—" }}</td>
+      <td class="muted">{{ device.last_seen[:19] }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">
+  <p>Aucun appareil enregistré.</p>
+  <p class="muted">Lance un scan pour remplir l’inventaire.</p>
+</div>
+{% endif %}
+{% endblock %}

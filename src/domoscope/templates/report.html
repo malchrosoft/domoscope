@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Domoscope · rapport réseau</title>
+  <style>
+    :root { color-scheme: light; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --accent:#0f766e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+    h1 { margin: 0 0 4px; font-size: 28px; }
+    h2 { margin: 32px 0 12px; font-size: 18px; }
+    .muted { color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: #f9fafb; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #ecfdf5; color: var(--accent); font-size: 11px; }
+    .summary { display: flex; gap: 24px; margin-top: 16px; }
+    .summary div { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; min-width: 120px; }
+    .summary strong { display: block; font-size: 22px; }
+    @media print { body { padding: 0; } a { color: inherit; text-decoration: none; } }
+  </style>
+</head>
+<body>
+  <h1>Domoscope · rapport du réseau interne</h1>
+  <p class="muted">Généré le {{ generated_at }}</p>
+
+  <div class="summary">
+    <div><strong>{{ devices | length }}</strong><span class="muted">appareils</span></div>
+    <div><strong>{{ devices | selectattr("controllable") | list | length }}</strong><span class="muted">pilotables</span></div>
+    <div><strong>{{ scans | length }}</strong><span class="muted">scans récents</span></div>
+  </div>
+
+  <h2>Appareils</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>IP</th><th>Type</th><th>Fabricant</th><th>Nom</th><th>MAC</th><th>Ports</th><th>Dernière vue</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+      <tr>
+        <td class="mono">{{ device.ip }}</td>
+        <td>{{ device.device_type }}{% if device.controllable %} <span class="badge">pilotable</span>{% endif %}</td>
+        <td>{{ device.vendor or "—" }}</td>
+        <td>{{ device.hostname or "—" }}</td>
+        <td class="mono">{{ device.mac or "—" }}</td>
+        <td class="mono">{{ device.open_ports | join(", ") or "—" }}</td>
+        <td class="muted">{{ device.last_seen[:19] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Historique des scans</h2>
+  <table>
+    <thead>
+      <tr><th>Début</th><th>Fin</th><th>Sous-réseau</th><th>Hôtes</th><th>Appareils</th><th>Nouveaux</th><th>Mis à jour</th></tr>
+    </thead>
+    <tbody>
+      {% for scan in scans %}
+      <tr>
+        <td class="muted">{{ scan.started_at[:19] }}</td>
+        <td class="muted">{{ scan.finished_at[:19] }}</td>
+        <td class="mono">{{ scan.subnet }}</td>
+        <td>{{ scan.hosts_alive }}</td>
+        <td>{{ scan.devices_found }}</td>
+        <td>{{ scan.devices_new }}</td>
+        <td>{{ scan.devices_updated }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">Aucun scan enregistré.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

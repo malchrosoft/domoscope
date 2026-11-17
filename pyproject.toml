@@ -1,7 +1,7 @@
 [project]
 name = "domoscope"
 version = "0.1.0"
-description = "Scan, inventory and control devices on your local network."
+description = "Self-hosted LAN scanner and home-automation inventory: discover every connected device, keep a searchable registry, generate reports, and control supported devices locally."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

@@ -133,3 +133,22 @@ src/domoscope/
 - [ ] Pilotes Hue, Shelly, Kasa, ESPHome, Home Connect
 - [ ] Export PDF
 - [ ] Intégration MQTT Discovery pour exposer les appareils à Home Assistant
+
+## Licence
+
+[PolyForm Noncommercial License 1.0.0](LICENSE.md), identifiant SPDX
+`PolyForm-Noncommercial-1.0.0` (non approuvée OSI).
+
+- **Autorisé sans frais** : usage personnel, hobby, recherche, association, enseignement,
+  organisme public. Le fork et la modification sont permis.
+- **Obligatoire en cas de fork** : conserver la licence et la ligne
+  `Required Notice: Copyright (c) 2026 Aymeric MALCHROWICZ`. Un fork ne peut pas être
+  relicencié ni revendu.
+- **Interdit sans accord** : tout usage commercial, y compris l’usage interne en entreprise,
+  l’intégration dans un produit payant, l’hébergement pour des tiers et la revente.
+
+Une licence commerciale payante est disponible séparément : voir [COMMERCIAL.md](COMMERCIAL.md).
+
+> Le bouton « Fork » de GitHub reste disponible sur un dépôt public : la licence encadre
+> l’usage et la redistribution, pas l’acte de forker.
+

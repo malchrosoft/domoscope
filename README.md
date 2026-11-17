@@ -148,6 +148,8 @@ src/domoscope/
   l’intégration dans un produit payant, l’hébergement pour des tiers et la revente.
 
 Une licence commerciale payante est disponible séparément : voir [COMMERCIAL.md](COMMERCIAL.md).
+Les contributions externes ne sont acceptées que sous cession de droits explicite :
+voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > Le bouton « Fork » de GitHub reste disponible sur un dépôt public : la licence encadre
 > l’usage et la redistribution, pas l’acte de forker.

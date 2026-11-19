@@ -16,29 +16,34 @@ Domoscope est un petit projet Python local qui :
 
 ## Démarrage rapide
 
-```powershell
-cd I:\Dev\DEVELOPPEMENT\domoscope
-uv sync --extra tuya
+Depuis le dépôt, une seule commande installe les dépendances, crée la base, lance un premier
+scan en arrière-plan si l'inventaire est vide, puis démarre l'interface :
 
-uv run domoscope init
-uv run domoscope scan
-uv run domoscope serve
+```shell
+uv run domoscope
 ```
 
 Puis ouvrir <http://127.0.0.1:8765>.
 
-Alternative avec le script fourni :
+## Installation
 
-```powershell
-.\run.ps1 scan
-.\run.ps1 serve
+Domoscope s'installe comme un outil en ligne de commande, sans cloner le dépôt :
+
+```shell
+uv tool install git+https://github.com/malchrosoft/domoscope
+domoscope
 ```
+
+Les données (base, clé de chiffrement, rapports) vont alors dans le dossier de données de
+l'utilisateur ; `domoscope init` affiche leur emplacement. Depuis le dépôt, elles restent dans
+`data/`.
 
 ## Commandes
 
 | Commande | Effet |
 |---|---|
-| `uv run domoscope init` | Crée la base SQLite et la clé de chiffrement |
+| `uv run domoscope` | Lance l’interface web (équivaut à `serve`) |
+| `uv run domoscope init` | Crée la base SQLite et affiche l’emplacement des données |
 | `uv run domoscope scan` | Scanne le réseau et met à jour l’inventaire |
 | `uv run domoscope scan --subnet 192.168.0.0/24` | Force un sous-réseau |
 | `uv run domoscope devices` | Liste les appareils connus |
@@ -61,13 +66,14 @@ Les variables sont lues dans l’environnement (voir `.env.example`) :
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `DOMOSCOPE_DB` | `data/domoscope.db` | Base SQLite |
+| `DOMOSCOPE_HOME` | `data/` ou dossier utilisateur | Dossier des données |
+| `DOMOSCOPE_DB` | `$DOMOSCOPE_HOME/domoscope.db` | Base SQLite |
 | `DOMOSCOPE_SUBNET` | auto | Force le sous-réseau à scanner |
 | `DOMOSCOPE_HOST` | `127.0.0.1` | Écoute web |
 | `DOMOSCOPE_PORT` | `8765` | Port web |
 | `DOMOSCOPE_ONLINE_LOOKUP` | `0` | Recherche OUI en ligne (macvendors.com) |
 | `DOMOSCOPE_TUYA_VERSION` | `3.3` | Version du protocole Tuya |
-| `DOMOSCOPE_SECRET_KEY` | généré | Clé de chiffrement des secrets |
+| `DOMOSCOPE_SECRET_KEY` | fichier `secret.key` | Clé Fernet de chiffrement des secrets |
 
 ## Pilotage des ampoules Superia Milano
 
@@ -81,14 +87,13 @@ Pour les piloter, il faut renseigner dans la fiche de l’appareil :
 
 Pour récupérer ces valeurs, le plus simple est `tinytuya` :
 
-```powershell
-uv pip install tinytuya
+```shell
 uv run python -m tinytuya wizard
 ```
 
 Le wizard demande les identifiants du **Tuya IoT Platform** (gratuit), scanne le réseau et génère un `devices.json` avec les Device ID et Local Keys. Recopie ensuite les valeurs dans la fiche Domoscope.
 
-> La Local Key est chiffrée en base avec `cryptography` (clé générée dans `data/secret.key`). Ne partage jamais ce fichier ni la base.
+> La Local Key est chiffrée en base avec `cryptography` (clé générée dans `secret.key`, à côté de la base). Ne partage jamais ce fichier ni la base.
 
 ## Architecture
 
@@ -114,7 +119,7 @@ src/domoscope/
 
 - Par défaut, **aucune donnée ne part vers le cloud**.
 - Le scan est **lecture seule** ; le pilotage n’est actif que pour les appareils dont tu as saisi les identifiants.
-- Les secrets sont chiffrés avec une clé locale `data/secret.key` (à sauvegarder, sinon les clés Tuya deviennent illisibles).
+- Les secrets sont chiffrés avec une clé locale `secret.key` (à sauvegarder, sinon les clés Tuya deviennent illisibles).
 - L’interface web écoute sur `127.0.0.1` par défaut. Si tu l’exposes sur le LAN, ajoute une authentification et HTTPS.
 - N’utilise pas Domoscope pour scanner un réseau qui ne t’appartient pas.
 
@@ -123,16 +128,11 @@ src/domoscope/
 - Les appareils **cloud-only** (Home Connect/BSH, certains Xiaomi, Tuya sans clé locale) sont détectés mais pas pilotables.
 - Le mDNS dépend du pare-feu Windows et de la configuration du réseau ; certains appareils ne répondent qu’en multicast.
 - Les scans ping/ARP peuvent manquer les appareils qui bloquent l’ICMP ou sont en veille.
-- Le pilotage Tuya nécessite `tinytuya` et une clé locale valide.
+- Le pilotage Tuya nécessite une clé locale valide.
 
 ## Feuille de route
 
-- [ ] Authentification de l’interface web
-- [ ] Planificateur de scans (APScheduler)
-- [ ] Notifications de nouveaux appareils
-- [ ] Pilotes Hue, Shelly, Kasa, ESPHome, Home Connect
-- [ ] Export PDF
-- [ ] Intégration MQTT Discovery pour exposer les appareils à Home Assistant
+Voir [ROADMAP.md](ROADMAP.md).
 
 ## Licence
 

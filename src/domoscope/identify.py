@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .discovery import TUYA_PORT
 from .models import Device
 
 PORT_LABELS: dict[int, str] = {
@@ -20,7 +21,7 @@ PORT_LABELS: dict[int, str] = {
     5001: "Synology DSM (HTTPS)",
     5357: "WSD",
     6053: "ESPHome",
-    6668: "Tuya local",
+    TUYA_PORT: "Tuya local",
     8008: "Chromecast",
     8009: "Chromecast",
     8080: "Interface web",
@@ -33,6 +34,7 @@ PORT_LABELS: dict[int, str] = {
     9999: "TP-Link Kasa",
     16021: "Nanoleaf",
     32400: "Plex",
+    55443: "Yeelight",
 }
 
 
@@ -51,7 +53,7 @@ def guess_device_type(device: Device) -> str:
 
     if "bsh" in vendor or "bosch" in vendor or "siemens" in vendor:
         return "Appareil BSH / Home Connect"
-    if "tuya" in vendor or 6668 in ports or services.get("tuya"):
+    if "tuya" in vendor or TUYA_PORT in ports or services.get("tuya"):
         return "Ampoule / prise Tuya"
     if "synology" in vendor:
         return "NAS Synology"

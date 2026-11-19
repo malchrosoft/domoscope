@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from .discovery import TUYA_PORT
+
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
@@ -30,7 +32,7 @@ class Device:
 
     @property
     def is_tuya(self) -> bool:
-        return bool(self.tuya_device_id and self.tuya_local_key) or 6668 in self.open_ports or (
+        return bool(self.tuya_device_id and self.tuya_local_key) or TUYA_PORT in self.open_ports or (
             "tuya" in (self.vendor or "").lower()
         )
 

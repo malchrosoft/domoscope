@@ -1,73 +1,52 @@
 from __future__ import annotations
 
-import base64
 import os
+from functools import cached_property
 from pathlib import Path
+
+from cryptography.fernet import Fernet, InvalidToken
 
 from .config import settings
 
-try:  # pragma: no cover - depends on optional package state
-    from cryptography.fernet import Fernet, InvalidToken
-except ImportError:  # pragma: no cover
-    Fernet = None  # type: ignore[assignment]
-    InvalidToken = Exception  # type: ignore[assignment]
-
 
 class SecretBox:
-    """Small helper that encrypts local keys before they touch SQLite.
+    """Encrypts local keys before they touch SQLite.
 
-    If ``cryptography`` is unavailable the value is stored as plain text with a
-    ``plain:`` prefix. That keeps the MVP usable, but the UI shows a warning.
+    The key is `DOMOSCOPE_SECRET_KEY` (a Fernet key, see `Fernet.generate_key()`) or a key file
+    created on first use next to the database.
     """
 
     def __init__(self, key_path: Path | None = None, secret: str | None = None) -> None:
         self.key_path = key_path or settings.secret_path
-        self._fernet = None
-        if Fernet is None:
-            return
-        key = self._load_or_create_key(secret)
-        self._fernet = Fernet(key)
+        self.secret = secret or settings.secret_key
 
-    def _load_or_create_key(self, secret: str | None) -> bytes:
-        if secret:
-            raw = secret.encode("utf-8")
-            if len(raw) == 44:
-                return raw
-            return base64.urlsafe_b64encode(raw.ljust(32, b"0")[:32])
-        if self.key_path.exists():
-            return self.key_path.read_bytes().strip()
-        key = Fernet.generate_key()
-        self.key_path.write_bytes(key)
-        try:
+    @cached_property
+    def _fernet(self) -> Fernet:
+        if self.secret:
+            try:
+                return Fernet(self.secret)
+            except ValueError as exc:
+                raise RuntimeError("DOMOSCOPE_SECRET_KEY must be a Fernet key") from exc
+        if not self.key_path.exists():
+            self.key_path.parent.mkdir(parents=True, exist_ok=True)
+            self.key_path.write_bytes(Fernet.generate_key())
             os.chmod(self.key_path, 0o600)
-        except OSError:
-            pass
-        return key
-
-    @property
-    def encrypted(self) -> bool:
-        return self._fernet is not None
+        return Fernet(self.key_path.read_bytes().strip())
 
     def encrypt(self, value: str | None) -> str | None:
         if not value:
             return None
-        if self._fernet is None:
-            return "plain:" + value
         return "fernet:" + self._fernet.encrypt(value.encode("utf-8")).decode("ascii")
 
     def decrypt(self, value: str | None) -> str | None:
         if not value:
             return None
-        if value.startswith("plain:"):
-            return value[6:]
-        if value.startswith("fernet:"):
-            if self._fernet is None:
-                raise RuntimeError("cryptography is required to decrypt this value")
-            try:
-                return self._fernet.decrypt(value[7:].encode("ascii")).decode("utf-8")
-            except InvalidToken as exc:  # pragma: no cover
-                raise RuntimeError("Invalid secret key for this database") from exc
-        return value
+        if not value.startswith("fernet:"):  # "plain:" values written by early versions
+            return value.removeprefix("plain:")
+        try:
+            return self._fernet.decrypt(value[7:].encode("ascii")).decode("utf-8")
+        except InvalidToken as exc:
+            raise RuntimeError("Invalid secret key for this database") from exc
 
 
 secret_box = SecretBox()

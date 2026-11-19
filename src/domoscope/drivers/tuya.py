@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import tinytuya
+
 from ..config import settings
 from ..models import Device
 from .base import CommandResult, DriverError
-
-try:  # optional dependency
-    import tinytuya
-except ImportError:  # pragma: no cover
-    tinytuya = None  # type: ignore[assignment]
 
 
 class TuyaDriver:
@@ -22,8 +19,6 @@ class TuyaDriver:
     def __init__(self, device: Device) -> None:
         if not device.tuya_device_id or not device.tuya_local_key:
             raise DriverError("Device ID and local key are required for Tuya control")
-        if tinytuya is None:
-            raise DriverError("tinytuya is not installed. Run: uv sync --extra tuya")
         self.device = device
 
     def _make(self):

@@ -13,10 +13,11 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
     "cryptography>=43",
+    "platformdirs>=4",
+    "tinytuya>=1.15",
 ]
 
 [project.optional-dependencies]
-tuya = ["tinytuya>=1.15"]
 dev = ["pytest>=8", "ruff>=0.8"]
 
 [project.scripts]

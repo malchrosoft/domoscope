@@ -4,8 +4,21 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data"
+from platformdirs import user_data_path
+
+_SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _data_dir() -> Path:
+    """`DOMOSCOPE_HOME`, else `./data` in a source checkout, else the per-user data directory."""
+    if home := os.getenv("DOMOSCOPE_HOME"):
+        return Path(home)
+    if (_SOURCE_ROOT / "pyproject.toml").exists():
+        return _SOURCE_ROOT / "data"
+    return user_data_path("domoscope", appauthor=False)
+
+
+DATA_DIR = _data_dir()
 REPORTS_DIR = DATA_DIR / "reports"
 
 
@@ -25,13 +38,6 @@ class Settings:
     online_lookup: bool = field(default_factory=lambda: _env_bool("DOMOSCOPE_ONLINE_LOOKUP"))
     tuya_version: str = field(default_factory=lambda: os.getenv("DOMOSCOPE_TUYA_VERSION", "3.3"))
     secret_key: str | None = field(default_factory=lambda: os.getenv("DOMOSCOPE_SECRET_KEY") or None)
-
-    def __post_init__(self) -> None:
-        if not self.db_path.is_absolute():
-            self.db_path = PROJECT_ROOT / self.db_path
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     @property
     def secret_path(self) -> Path:

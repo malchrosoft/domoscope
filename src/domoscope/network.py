@@ -43,6 +43,24 @@ _VIRTUAL_HINTS = (
 )
 
 
+def _run(cmd: list[str], timeout: float, encoding: str | None = None) -> str:
+    """stdout of `cmd`, or "" if it cannot run."""
+    try:
+        return subprocess.run(
+            cmd, capture_output=True, text=True, encoding=encoding, errors="replace", timeout=timeout, check=False
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _is_windows() -> bool:
+    return platform.system().lower() == "windows"
+
+
+def sort_ips(ips) -> list[str]:
+    return sorted(ips, key=ipaddress.ip_address)
+
+
 def _field(text: str, *patterns: str) -> str | None:
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -117,26 +135,9 @@ def _parse_ipconfig(output: str) -> list[Network]:
 
 def _parse_linux() -> list[Network]:
     networks: list[Network] = []
-    try:
-        result = subprocess.run(
-            ["ip", "-4", "-o", "addr", "show"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        route = subprocess.run(
-            ["ip", "route", "show", "default"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return networks
-    gateways = re.findall(r"default via ([0-9.]+)", route)
+    gateways = re.findall(r"default via ([0-9.]+)", _run(["ip", "route", "show", "default"], 10))
     gateway = gateways[0] if gateways else None
-    for line in result.stdout.splitlines():
+    for line in _run(["ip", "-4", "-o", "addr", "show"], 10).splitlines():
         match = re.search(r"\d+:\s+(\S+)\s+inet\s+([0-9.]+)/(\d+)", line)
         if not match:
             continue
@@ -159,20 +160,8 @@ def _parse_linux() -> list[Network]:
 
 
 def local_networks() -> list[Network]:
-    if platform.system().lower() == "windows":
-        try:
-            output = subprocess.run(
-                ["ipconfig", "/all"],
-                capture_output=True,
-                text=True,
-                encoding="cp850",
-                timeout=15,
-                check=False,
-                errors="replace",
-            ).stdout
-            return _parse_ipconfig(output)
-        except (OSError, subprocess.SubprocessError):
-            pass
+    if _is_windows():
+        return _parse_ipconfig(_run(["ipconfig", "/all"], 15, encoding="cp850"))
     return _parse_linux()
 
 
@@ -205,7 +194,7 @@ def choose_network(subnet: str | None = None) -> Network:
 
 
 def ping_host(ip: str, timeout_ms: int = 600) -> bool:
-    if platform.system().lower() == "windows":
+    if _is_windows():
         cmd = ["ping", "-n", "1", "-w", str(timeout_ms), ip]
     else:
         cmd = ["ping", "-c", "1", "-W", str(max(1, math.ceil(timeout_ms / 1000))), ip]
@@ -230,24 +219,13 @@ def ping_sweep(network: Network, timeout_ms: int = 600, workers: int = 64) -> li
         for future in as_completed(futures):
             if future.result():
                 alive.append(futures[future])
-    return sorted(alive, key=lambda value: tuple(int(part) for part in value.split(".")))
+    return sort_ips(alive)
 
 
 def arp_table() -> dict[str, str]:
     table: dict[str, str] = {}
-    if platform.system().lower() == "windows":
-        try:
-            output = subprocess.run(
-                ["arp", "-a"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-                errors="replace",
-            ).stdout
-        except (OSError, subprocess.SubprocessError):
-            return table
-        for line in output.splitlines():
+    if _is_windows():
+        for line in _run(["arp", "-a"], 10).splitlines():
             match = re.search(
                 r"([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\s+([0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2}){5})",
                 line,
@@ -255,17 +233,7 @@ def arp_table() -> dict[str, str]:
             if match:
                 table[match.group(1)] = match.group(2).upper().replace("-", ":")
         return table
-    try:
-        output = subprocess.run(
-            ["ip", "neigh"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return table
-    for line in output.splitlines():
+    for line in _run(["ip", "neigh"], 10).splitlines():
         match = re.search(
             r"([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*?([0-9a-f]{2}(?::[0-9a-f]{2}){5})",
             line,
@@ -293,7 +261,7 @@ def port_scan(hosts: list[str], ports: list[int], timeout: float = 0.35, workers
             host, port, is_open = future.result()
             if is_open:
                 results[host].append(port)
-    for host, open_ports in results.items():
+    for open_ports in results.values():
         open_ports.sort()
     return results
 
@@ -307,26 +275,10 @@ def reverse_dns(ip: str) -> str | None:
 
 
 def netbios_name(ip: str) -> str | None:
-    if platform.system().lower() != "windows":
+    if not _is_windows():
         return None
-    try:
-        output = subprocess.run(
-            ["nbtstat", "-A", ip],
-            capture_output=True,
-            text=True,
-            encoding="cp850",
-            timeout=3,
-            check=False,
-            errors="replace",
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return None
-    for line in output.splitlines():
+    for line in _run(["nbtstat", "-A", ip], 3, encoding="cp850").splitlines():
         match = re.search(r"^\s*(\S+)\s+<00>\s+UNIQUE", line)
         if match:
             return match.group(1).strip()
     return None
-
-
-def local_ip_for_interface(network: Network) -> str:
-    return network.ip

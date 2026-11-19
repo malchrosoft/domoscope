@@ -9,21 +9,53 @@ SSDP_ADDR = "239.255.255.250"
 SSDP_PORT = 1900
 MDNS_ADDR = "224.0.0.251"
 MDNS_PORT = 5353
+TUYA_PORT = 6668
+# LIFX GetService (type 2): 36-byte header, size 0x24, tagged + addressable, protocol 1024.
+LIFX_GET_SERVICE = bytes.fromhex("24000034" + "00" * 28 + "02000000")
 
 
-def _parse_headers(payload: bytes) -> dict[str, list[str]]:
-    text = payload.decode("utf-8", errors="replace")
-    headers: dict[str, list[str]] = {}
-    for line in text.splitlines()[1:]:
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        headers.setdefault(key.strip().upper(), []).append(value.strip())
+def _parse_headers(payload: bytes) -> dict[str, str]:
+    """First value of each header of an SSDP-style reply."""
+    headers: dict[str, str] = {}
+    for line in payload.decode("utf-8", errors="replace").splitlines()[1:]:
+        key, sep, value = line.partition(":")
+        if sep:
+            headers.setdefault(key.strip().upper(), value.strip())
     return headers
 
 
+def _udp_request(
+    local_ip: str, targets: set[str], port: int, payload: bytes, timeout: float
+) -> list[tuple[str, bytes]]:
+    """Send `payload` to each target and collect every reply until `timeout`."""
+    replies: list[tuple[str, bytes]] = []
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind((local_ip, 0))
+        sock.settimeout(1.0)
+        for target in targets:
+            try:
+                sock.sendto(payload, (target, port))
+            except OSError:
+                pass
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, address = sock.recvfrom(65535)
+            except TimeoutError:
+                continue
+            replies.append((address[0], data))
+    except OSError:
+        pass
+    finally:
+        sock.close()
+    return replies
+
+
 def ssdp_discover(local_ip: str, timeout: float = 4.0) -> dict[str, list[dict[str, Any]]]:
-    """Send an SSDP M-SEARCH and group replies by source IP."""
+    """Send an SSDP M-SEARCH and group distinct replies by source IP."""
     results: dict[str, list[dict[str, Any]]] = {}
     message = (
         "M-SEARCH * HTTP/1.1\r\n"
@@ -32,35 +64,14 @@ def ssdp_discover(local_ip: str, timeout: float = 4.0) -> dict[str, list[dict[st
         "MX: 3\r\n"
         "ST: ssdp:all\r\n\r\n"
     ).encode("ascii")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((local_ip, 0))
-        sock.settimeout(1.0)
-        sock.sendto(message, (SSDP_ADDR, SSDP_PORT))
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                payload, address = sock.recvfrom(65535)
-            except TimeoutError:
-                continue
-            headers = _parse_headers(payload)
-            if not headers:
-                continue
-            entry = {
-                "server": (headers.get("SERVER") or [""])[0],
-                "st": (headers.get("ST") or [""])[0],
-                "usn": (headers.get("USN") or [""])[0],
-                "location": (headers.get("LOCATION") or [""])[0],
-            }
-            bucket = results.setdefault(address[0], [])
-            key = (entry["st"], entry["usn"])
-            if all((item.get("st"), item.get("usn")) != key for item in bucket):
-                bucket.append(entry)
-    except OSError:
-        return results
-    finally:
-        sock.close()
+    for ip, payload in _udp_request(local_ip, {SSDP_ADDR}, SSDP_PORT, message, timeout):
+        headers = _parse_headers(payload)
+        if not headers:
+            continue
+        entry = {name: headers.get(name.upper(), "") for name in ("server", "st", "usn", "location")}
+        bucket = results.setdefault(ip, [])
+        if all((item["st"], item["usn"]) != (entry["st"], entry["usn"]) for item in bucket):
+            bucket.append(entry)
     return results
 
 
@@ -110,57 +121,29 @@ def mdns_discover(local_ip: str, timeout: float = 4.0) -> dict[str, list[str]]:
     return results
 
 
-def _broadcast_request(
-    local_ip: str,
-    broadcast: str,
-    port: int,
-    payload: bytes,
-    timeout: float = 3.0,
-) -> list[tuple[str, bytes]]:
-    replies: list[tuple[str, bytes]] = []
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.bind((local_ip, 0))
-        sock.settimeout(1.0)
-        for target in {broadcast, "255.255.255.255"}:
-            try:
-                sock.sendto(payload, (target, port))
-            except OSError:
-                pass
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                data, address = sock.recvfrom(65535)
-            except TimeoutError:
-                continue
-            replies.append((address[0], data))
-    except OSError:
-        pass
-    finally:
-        sock.close()
-    return replies
+def _broadcast_ips(local_ip: str, broadcast: str, port: int, payload: bytes, timeout: float) -> list[str]:
+    replies = _udp_request(local_ip, {broadcast, "255.255.255.255"}, port, payload, timeout)
+    return sorted({ip for ip, _ in replies})
 
 
 def kasa_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> list[str]:
-    payload = b'{"system":{"get_sysinfo":{}}}'
-    return sorted({ip for ip, _ in _broadcast_request(local_ip, broadcast, 9999, payload, timeout)})
+    return _broadcast_ips(local_ip, broadcast, 9999, b'{"system":{"get_sysinfo":{}}}', timeout)
 
 
 def wiz_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> list[str]:
-    payload = b'{"method":"getPilot","params":{}}'
-    return sorted({ip for ip, _ in _broadcast_request(local_ip, broadcast, 38899, payload, timeout)})
+    return _broadcast_ips(local_ip, broadcast, 38899, b'{"method":"getPilot","params":{}}', timeout)
 
 
 def lifx_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> list[str]:
-    # LIFX GetService packet: 36 bytes.
-    payload = bytes.fromhex("24000004010000000000000000000000000000000000020000")
-    return sorted({ip for ip, _ in _broadcast_request(local_ip, broadcast, 56700, payload, timeout)})
+    return _broadcast_ips(local_ip, broadcast, 56700, LIFX_GET_SERVICE, timeout)
 
 
 def miio_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> list[str]:
-    payload = bytes([0x21, 0x31, 0x00, 0x20] + [0xFF] * 28)
-    return sorted({ip for ip, _ in _broadcast_request(local_ip, broadcast, 54321, payload, timeout)})
+    return _broadcast_ips(local_ip, broadcast, 54321, bytes([0x21, 0x31, 0x00, 0x20] + [0xFF] * 28), timeout)
+
+
+def tuya_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> list[str]:
+    return _broadcast_ips(local_ip, broadcast, 6666, bytes.fromhex("000055aa000000000000000900000000"), timeout)
 
 
 def yeelight_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> dict[str, dict[str, str]]:
@@ -171,49 +154,31 @@ def yeelight_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> di
         "ST: wifi_bulb\r\n\r\n"
     ).encode("ascii")
     replies: dict[str, dict[str, str]] = {}
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((local_ip, 0))
-        sock.settimeout(1.0)
-        sock.sendto(message, (SSDP_ADDR, 1982))
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                payload, address = sock.recvfrom(65535)
-            except TimeoutError:
-                continue
-            headers = _parse_headers(payload)
-            replies[address[0]] = {
-                "location": (headers.get("LOCATION") or [""])[0],
-                "model": (headers.get("MODEL") or [""])[0],
-                "support": (headers.get("SUPPORT") or [""])[0],
-            }
-    except OSError:
-        pass
-    finally:
-        sock.close()
+    for ip, payload in _udp_request(local_ip, {SSDP_ADDR}, 1982, message, timeout):
+        headers = _parse_headers(payload)
+        replies[ip] = {name: headers.get(name.upper(), "") for name in ("location", "model", "support")}
     return replies
 
 
-def tuya_discover(local_ip: str, broadcast: str, timeout: float = 3.0) -> list[str]:
-    payload = bytes.fromhex("000055aa000000000000000900000000")
-    return sorted({ip for ip, _ in _broadcast_request(local_ip, broadcast, 6666, payload, timeout)})
+# Vendor-specific broadcast probes, keyed by their name in `Device.services`.
+BROADCASTERS = {
+    "tuya": tuya_discover,
+    "kasa": kasa_discover,
+    "wiz": wiz_discover,
+    "lifx": lifx_discover,
+    "miio": miio_discover,
+    "yeelight": yeelight_discover,
+}
 
 
 def summarize_services(device_services: dict[str, Any]) -> list[str]:
-    """Human-readable services for the UI/report."""
-    labels: list[str] = []
+    """Human-readable services for the UI."""
+    labels: set[str] = set()
     for item in device_services.get("ssdp", []):
-        server = item.get("server")
-        st = item.get("st")
-        if server:
-            labels.append(f"UPnP: {server}")
-        elif st:
-            labels.append(f"UPnP: {st}")
-    for service in device_services.get("mdns", []):
-        labels.append(f"mDNS: {service}")
-    for key in ("tuya", "kasa", "wiz", "lifx", "miio", "yeelight"):
-        if device_services.get(key):
-            labels.append(key.upper())
-    return sorted(set(labels))
+        if item.get("server"):
+            labels.add(f"UPnP : {item['server']}")
+        if item.get("st"):
+            labels.add(f"UPnP type : {item['st']}")
+    labels.update(f"mDNS : {service}" for service in device_services.get("mdns", []))
+    labels.update(key.upper() for key in BROADCASTERS if device_services.get(key))
+    return sorted(labels)

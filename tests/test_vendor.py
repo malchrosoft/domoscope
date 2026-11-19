@@ -12,3 +12,9 @@ def test_oui_and_vendor():
     assert lookup_vendor("84:E3:42:E2:B4:E1", online=False) == "Tuya Smart Inc."
     assert lookup_vendor("C8:D7:78:33:C9:2E", online=False) == "BSH Hausgeräte GmbH"
     assert lookup_vendor("00:00:00:00:00:00", online=False) is None
+
+
+def test_sort_ips_numerically():
+    from domoscope.network import sort_ips
+
+    assert sort_ips(["192.168.0.10", "192.168.0.9", "10.0.0.1"]) == ["10.0.0.1", "192.168.0.9", "192.168.0.10"]

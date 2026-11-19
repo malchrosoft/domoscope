@@ -26,10 +26,13 @@ def _print_devices() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="domoscope", description="Scan and inventory your LAN.")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(
+        prog="domoscope", description="Scan and inventory your LAN. Without a command: start the web interface."
+    )
+    parser.set_defaults(command="serve", host=settings.host, port=settings.port, reload=False)
+    sub = parser.add_subparsers(dest="command")
 
-    sub.add_parser("init", help="Create the SQLite database")
+    sub.add_parser("init", help="Create the SQLite database and show where data is stored")
 
     scan_parser = sub.add_parser("scan", help="Scan the local network")
     scan_parser.add_argument("--subnet", help="Force a subnet, e.g. 192.168.0.0/24")
@@ -40,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     report_parser.add_argument("--format", choices=["html", "json", "csv"], default="html")
     report_parser.add_argument("--output", help="Output path (default: data/reports/...)")
 
-    serve_parser = sub.add_parser("serve", help="Start the web interface")
+    serve_parser = sub.add_parser("serve", help="Start the web interface (default)")
     serve_parser.add_argument("--host", default=settings.host)
     serve_parser.add_argument("--port", type=int, default=settings.port)
     serve_parser.add_argument("--reload", action="store_true")
@@ -50,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         database.init()
         print(f"Base initialisée: {settings.db_path}")
-        print(f"Secret: {settings.secret_path}")
+        print(f"Clé de chiffrement: {settings.secret_path}")
         return 0
 
     if args.command == "scan":
@@ -79,19 +82,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Rapport écrit: {path}")
         return 0
 
-    if args.command == "serve":
-        import uvicorn
+    import uvicorn
 
-        uvicorn.run(
-            "domoscope.web:app",
-            host=args.host,
-            port=args.port,
-            reload=args.reload,
-        )
-        return 0
-
-    parser.error("Unknown command")
-    return 2
+    print(f"Domoscope: http://{args.host}:{args.port}  (données: {settings.db_path.parent})")
+    uvicorn.run("domoscope.web:app", host=args.host, port=args.port, reload=args.reload)
+    return 0
 
 
 if __name__ == "__main__":

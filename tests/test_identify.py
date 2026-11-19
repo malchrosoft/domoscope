@@ -31,3 +31,9 @@ def test_printer():
 def test_unknown_device():
     device = make_device(open_ports=[])
     assert guess_device_type(device) == "Appareil réseau"
+
+
+def test_ports_used_for_identification_are_scanned():
+    from domoscope.scanner import COMMON_PORTS
+
+    assert {445, 55443} <= set(COMMON_PORTS)

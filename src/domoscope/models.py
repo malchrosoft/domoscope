@@ -28,6 +28,9 @@ class Device:
     tuya_device_id: str | None = None
     tuya_local_key: str | None = None
     tuya_version: str | None = None
+    check_status: str | None = None
+    check_error: str | None = None
+    checked_at: str | None = None
     id: int | None = None
 
     @property
@@ -59,6 +62,9 @@ class Device:
             "tuya_local_key": "***" if self.tuya_local_key else None,
             "tuya_version": self.tuya_version,
             "controllable": self.controllable,
+            "check_status": self.check_status,
+            "check_error": self.check_error,
+            "checked_at": self.checked_at,
         }
 
 

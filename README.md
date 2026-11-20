@@ -54,6 +54,7 @@ l'utilisateur ; `domoscope init` affiche leur emplacement. Depuis le dépôt, el
 ## Interface web
 
 - `/` : tableau de bord et liste des appareils
+- `/domotique` : appareils pilotables, vérifiés à chaque visite (prêt / injoignable / clé invalide)
 - `/devices/{id}` : fiche détaillée, notes, identifiants Tuya, pilotage
 - `/report` : rapport imprimable
 - `/api/devices` : inventaire JSON

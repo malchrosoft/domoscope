@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Domoscope · domotique{% endblock %}
+{% block content %}
+{% set statuses = {
+  "ready": ("prêt", "ok"),
+  "unreachable": ("injoignable", "warn"),
+  "invalid_key": ("clé invalide", "danger"),
+} %}
+<section class="hero">
+  <div>
+    <h1>Domotique</h1>
+    <p class="muted">
+      {{ ready }} appareil{{ "s" if ready > 1 }} prêt{{ "s" if ready > 1 }} sur {{ cards | length }} pilotable{{ "s" if cards | length > 1 }}
+      · vérifiés à l’instant
+    </p>
+  </div>
+  <a class="button" href="/domotique">Revérifier</a>
+</section>
+
+{% if cards %}
+<section class="grid">
+  {% for device, health in cards %}
+  {% set label, tone = statuses[health.status] %}
+  {% set state = health.state %}
+  <article class="card device-card">
+    <header>
+      <div>
+        <h2><a href="/devices/{{ device.id }}">{{ device.hostname or device.device_type }}</a></h2>
+        <p class="muted mono">{{ device.ip }}{% if device.hostname %} · {{ device.device_type }}{% endif %}</p>
+      </div>
+      <span class="badge {{ tone }}">{{ label }}</span>
+    </header>
+
+    {% if health.status == "ready" %}
+      <div class="state">
+        {% if state.colour %}
+          <span class="swatch" style="background: {{ state.colour }}; --glow: {{ state.colour if state.is_on else 'transparent' }}"></span>
+        {% endif %}
+        <span>{{ "Allumée" if state.is_on else "Éteinte" }}</span>
+        {% if state.brightness is not none %}<span class="muted">· {{ state.brightness }} %</span>{% endif %}
+      </div>
+      <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+        <input type="hidden" name="back" value="/domotique">
+        <button class="primary" name="action" value="toggle">{{ "Éteindre" if state.is_on else "Allumer" }}</button>
+      </form>
+      <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+        <input type="hidden" name="back" value="/domotique">
+        <label>Luminosité
+          <input type="range" name="brightness" min="1" max="100" value="{{ state.brightness or 100 }}">
+        </label>
+        <button name="action" value="brightness">Appliquer</button>
+      </form>
+      <form method="post" action="/devices/{{ device.id }}/command" class="inline">
+        <input type="hidden" name="back" value="/domotique">
+        <label>Couleur
+          <input type="color" name="colour" value="{{ state.colour or '#ffffff' }}">
+        </label>
+        <button name="action" value="color">Appliquer</button>
+      </form>
+    {% else %}
+      <p class="muted">{{ health.error }}</p>
+      <p class="muted">
+        {% if health.status == "invalid_key" %}
+          La Local Key ou la version du protocole ne correspond plus (appareil réappairé ?).
+          <a href="/devices/{{ device.id }}">Mettre à jour les identifiants</a>
+        {% else %}
+          Appareil hors ligne, ou son IP a changé : relance un scan depuis
+          <a href="/">l’inventaire</a>.
+        {% endif %}
+      </p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<div class="empty">
+  <p>Aucun appareil pilotable.</p>
+  <p class="muted">Renseigne le Device ID et la Local Key d’un appareil Tuya depuis sa fiche.</p>
+</div>
+{% endif %}
+
+{% if to_configure %}
+<section class="card">
+  <h2>À configurer</h2>
+  <p class="muted">Appareils Tuya détectés, sans identifiants locaux.</p>
+  <ul class="tags">
+    {% for device in to_configure %}
+      <li><a href="/devices/{{ device.id }}">{{ device.hostname or device.ip }}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

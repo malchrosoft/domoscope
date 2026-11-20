@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
@@ -14,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from . import __version__
 from .db import database
 from .discovery import summarize_services
-from .drivers import DriverError, TuyaDriver
+from .drivers import READY, DriverError, TuyaDriver
 from .identify import describe, port_labels
 from .models import Device
 from .network import choose_network
@@ -28,7 +29,6 @@ templates.env.globals.update(
     port_labels=port_labels,
     version=__version__,
 )
-
 
 
 @asynccontextmanager
@@ -137,9 +137,13 @@ def command(
     red: int | None = Form(None),
     green: int | None = Form(None),
     blue: int | None = Form(None),
+    colour: str | None = Form(None),
+    back: str = Form(""),
 ) -> RedirectResponse:
     device = _device_or_404(device_id)
     try:
+        if colour:  # "#rrggbb" from an <input type="color">
+            red, green, blue = (int(colour.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
         driver = TuyaDriver(device)
         result = driver.command(
             action,
@@ -154,7 +158,28 @@ def command(
         message = f"Erreur : {exc}"
     except Exception as exc:  # noqa: BLE001 - surface driver errors in the UI
         message = f"Erreur inattendue : {exc}"
-    return _redirect(f"/devices/{device_id}", message)
+    return _redirect("/domotique" if back == "/domotique" else f"/devices/{device_id}", message)
+
+
+@app.get("/domotique", response_class=HTMLResponse)
+def home_automation(request: Request) -> HTMLResponse:
+    """Controllable devices, checked on every visit: a local key can stop working at any time."""
+    devices = database.list_devices()
+    controllable = [device for device in devices if device.controllable]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        healths = list(pool.map(lambda device: TuyaDriver(device).check(), controllable))
+    for device, health in zip(controllable, healths):
+        database.save_check(device.id, health.status, health.error)
+    return templates.TemplateResponse(
+        request=request,
+        name="domotique.html",
+        context={
+            "cards": list(zip(controllable, healths)),
+            "ready": sum(health.status == READY for health in healths),
+            "to_configure": [device for device in devices if device.is_tuya and not device.controllable],
+            "message": request.query_params.get("message"),
+        },
+    )
 
 
 @app.get("/report", response_class=HTMLResponse)

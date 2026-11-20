@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS devices (
     tuya_device_id TEXT,
     tuya_local_key_enc TEXT,
     tuya_version TEXT,
-    manual_fields TEXT NOT NULL DEFAULT '[]'
+    manual_fields TEXT NOT NULL DEFAULT '[]',
+    check_status TEXT,
+    check_error TEXT,
+    checked_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS scans (
@@ -46,6 +49,14 @@ CREATE TABLE IF NOT EXISTS scans (
 CREATE INDEX IF NOT EXISTS idx_devices_last_seen ON devices(last_seen);
 CREATE INDEX IF NOT EXISTS idx_scans_finished_at ON scans(finished_at);
 """
+
+# Columns added after the first release, created on `init` for older databases.
+ADDED_COLUMNS = {
+    "manual_fields": "TEXT NOT NULL DEFAULT '[]'",
+    "check_status": "TEXT",
+    "check_error": "TEXT",
+    "checked_at": "TEXT",
+}
 
 
 def _loads(value: str | None, default: Any) -> Any:
@@ -75,6 +86,9 @@ def _row_to_device(row: sqlite3.Row) -> Device:
         tuya_device_id=row["tuya_device_id"],
         tuya_local_key=secret_box.decrypt(row["tuya_local_key_enc"]),
         tuya_version=row["tuya_version"],
+        check_status=row["check_status"],
+        check_error=row["check_error"],
+        checked_at=row["checked_at"],
     )
 
 
@@ -94,8 +108,9 @@ class Database:
         with closing(self.connect()) as con, con:
             con.executescript(SCHEMA)
             columns = {row["name"] for row in con.execute("PRAGMA table_info(devices)")}
-            if "manual_fields" not in columns:
-                con.execute("ALTER TABLE devices ADD COLUMN manual_fields TEXT NOT NULL DEFAULT '[]'")
+            for name, definition in ADDED_COLUMNS.items():
+                if name not in columns:
+                    con.execute(f"ALTER TABLE devices ADD COLUMN {name} {definition}")
 
     def upsert_device(self, device: Device) -> tuple[int, bool]:
         """Insert or refresh a device. Returns (id, created)."""
@@ -234,6 +249,13 @@ class Database:
                     ),
                 )
         return self.get_device(device_id)
+
+    def save_check(self, device_id: int, status: str, error: str | None) -> None:
+        with closing(self.connect()) as con, con:
+            con.execute(
+                "UPDATE devices SET check_status = ?, check_error = ?, checked_at = ? WHERE id = ?",
+                (status, error, utc_now(), device_id),
+            )
 
     def save_scan(self, summary: ScanSummary) -> int:
         with closing(self.connect()) as con, con:

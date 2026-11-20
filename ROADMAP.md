@@ -14,19 +14,22 @@
 - [x] Simplification : code mort retiré, sondes UDP factorisées, liste des protocoles et port Tuya
       centralisés, appels système factorisés, plus d'effets de bord à l'import
 - [x] Un seul scan à la fois (scan au démarrage et bouton « Scanner »)
+- [x] Pilotage Tuya : luminosité et température en pourcentage (les valeurs brutes allaient de
+      10 à 1000), bascule lue sur le bon point de données selon l'ampoule, timeouts courts
 
-## Prochaine étape : onglet « Domotique »
+## Onglet « Domotique »
 
 Un onglet dédié aux appareils **pilotables**, distinct de l'inventaire réseau : n'y figurent que
 les appareils authentifiés, prêts à l'emploi, et dont on sait qu'ils répondent encore.
 
 ### Contenu
 
-- [ ] Route `/domotique` et lien dans la barre de navigation
-- [ ] Une carte par appareil pilotable : image, nom, pièce, type, IP actuelle, état
-      (allumé/éteint, luminosité, couleur)
-- [ ] Actions rapides sur la carte : allumer, éteindre, basculer, luminosité, couleur
-- [ ] Appareils détectés comme pilotables mais sans identifiants listés à part (« à configurer »)
+- [x] Route `/domotique` et lien dans la barre de navigation
+- [x] Une carte par appareil pilotable : nom, type, IP actuelle, état (allumé/éteint,
+      luminosité, couleur)
+- [ ] Image et pièce sur la carte (voir « Images des appareils »)
+- [x] Actions rapides sur la carte : allumer/éteindre, luminosité, couleur
+- [x] Appareils détectés comme pilotables mais sans identifiants listés à part (« à configurer »)
       avec un lien vers leur fiche
 
 ### Validité des identifiants
@@ -35,11 +38,13 @@ Un appareil n'est « prêt » que si sa dernière vérification a réussi. Une L
 quand l'appareil est réappairé dans l'application Smart Life : une clé saisie peut donc devenir
 invalide sans rien changer côté Domoscope.
 
-- [ ] Vérification de l'état via le driver (`TuyaDriver.status`, déjà écrit mais pas branché)
-- [ ] Stocker le résultat : `last_check_at`, `last_check_ok`, `last_check_error`
-- [ ] Trois statuts affichés : **prêt**, **injoignable** (hors ligne, IP changée), **clé invalide**
-- [ ] Vérification à l'ouverture de l'onglet (en parallèle) et à la demande
-- [ ] Suivre l'appareil par sa MAC : si le DHCP lui donne une nouvelle IP, le pilotage continue
+- [x] Vérification de l'état via le driver (`TuyaDriver.check`)
+- [x] Stocker le résultat : `check_status`, `check_error`, `checked_at`
+- [x] Trois statuts affichés : **prêt**, **injoignable** (hors ligne, IP changée), **clé invalide**
+- [x] Vérification à l'ouverture de l'onglet (en parallèle, 3 s au plus) et à la demande
+- [ ] Suivre l'appareil par sa MAC : si le DHCP lui donne une nouvelle IP, la retrouver via la
+      table ARP sans attendre un scan complet (aujourd'hui : statut « injoignable » jusqu'au scan)
+- [ ] Vérification en arrière-plan (planificateur) pour que la page s'affiche sans attendre
 
 ### Plus tard
 
@@ -101,8 +106,6 @@ table ARP depuis Android 10 et restreint ping et multicast.
 ## Fiabilité de la découverte
 
 - [ ] Éviter les doublons quand un appareil est vu d'abord sans MAC puis avec
-- [ ] Bascule Tuya : lire l'état allumé/éteint via `BulbDevice` (le DPS `1` ne vaut pas pour
-      toutes les ampoules, souvent `20`)
 - [ ] Découverte Tuya : écouter les broadcasts des appareils (UDP 6666/6667) au lieu d'y envoyer
       une requête
 - [ ] Tester `_parse_ipconfig` sur des sorties réelles (FR et EN)
